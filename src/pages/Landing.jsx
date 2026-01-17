@@ -1,3 +1,4 @@
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react';
 
 const Landing = () => {
+  const [showLearnMore, setShowLearnMore] = React.useState(false);
   const features = [
     {
       icon: MessageCircle,
@@ -88,12 +90,40 @@ const Landing = () => {
                     <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                   </Button>
                 </Link>
-                <Link to="/login">
-                  <Button variant="glass" size="xl">
-                    Learn More
-                  </Button>
-                </Link>
+                <Button 
+                  onClick={() => setShowLearnMore(!showLearnMore)}
+                  className="text-gray-700 px-8 py-4 rounded-xl font-semibold hover:bg-gray-100 transition"
+                >
+                  {showLearnMore ? 'Show Less' : 'Learn More'}
+                </Button>
               </div>
+
+              {showLearnMore && (
+                <div className="bg-blue-50 border-l-4 border-blue-500 p-6 rounded-lg slide-in">
+                  <h3 className="text-lg font-bold text-gray-900 mb-3">Why Choose MindCare AI?</h3>
+                  <p className="text-gray-700 leading-relaxed mb-4">
+                    MindCare AI combines cutting-edge artificial intelligence with evidence-based therapeutic techniques to provide personalized mental health support. Our platform offers:
+                  </p>
+                  <ul className="space-y-2 text-gray-700">
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-500 mt-1">✓</span>
+                      <span>24/7 availability with instant responses</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-500 mt-1">✓</span>
+                      <span>Complete privacy and confidentiality</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-500 mt-1">✓</span>
+                      <span>Science-backed therapeutic approaches</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-500 mt-1">✓</span>
+                      <span>Personalized wellness plans and tracking</span>
+                    </li>
+                  </ul>
+                </div>
+              )}
 
               <div className="flex items-center gap-6 pt-4">
                 <div className="flex -space-x-3">
@@ -198,7 +228,7 @@ const Landing = () => {
                 </p>
                 <Link to="/login">
                   <Button variant="hero" size="xl">
-                    Start Free Session
+                    Let's get started
                     <ArrowRight className="w-5 h-5" />
                   </Button>
                 </Link>
