@@ -1,8 +1,17 @@
 #!/bin/bash
 echo "🚀 Starting MindCare..."
-sudo service mysql start
-sleep 2
-fuser -k 5000/tcp 2>/dev/null
-cd /workspaces/psychiatrist-bot/backend && node server.js > /tmp/backend.log 2>&1 &
+
+# Start MySQL
+sudo mysqld --user=mysql --socket=/var/run/mysqld/mysqld.sock &
+echo "⏳ Waiting for MySQL..."
+sleep 5
+
+# Start Backend
+cd /workspaces/psychiatrist-bot/backend
+node server.js &
 echo "✅ Backend started!"
-cd /workspaces/psychiatrist-bot && npm run dev
+sleep 3
+
+# Start Frontend
+cd /workspaces/psychiatrist-bot
+npm run dev

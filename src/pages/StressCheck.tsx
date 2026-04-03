@@ -113,7 +113,15 @@ const StressCheck = () => {
     if (accuracy < 60) stress += 15;
     else if (accuracy < 80) stress += 10;
     
-    setStressScore(Math.min(Math.max(stress, 10), 95));
+    const finalScore = Math.min(Math.max(stress, 10), 95);
+    setStressScore(finalScore);
+    // Save to DB
+    const token = localStorage.getItem('token');
+    fetch((import.meta.env?.VITE_API_URL || 'http://localhost:5000/api') + '/stress/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ stressLevel: finalScore, mood: 'stress-check' }),
+    }).catch(e => console.error(e));
     setPhase('results');
   };
 
