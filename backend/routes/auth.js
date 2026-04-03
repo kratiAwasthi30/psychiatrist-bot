@@ -316,3 +316,17 @@ router.get('/me', authenticate, async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
+// Update profile
+router.put('/me', authenticate, async (req, res) => {
+  try {
+    const { full_name, phone, gender, dob } = req.body;
+    await db.query(
+      'UPDATE users SET full_name = ? WHERE user_id = ?',
+      [full_name, req.user.userId]
+    );
+    res.json({ success: true, message: 'Profile updated' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});

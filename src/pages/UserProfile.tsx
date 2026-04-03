@@ -88,9 +88,17 @@ const UserProfile = () => {
     navigate('/');
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     localStorage.setItem('userProfile', JSON.stringify(profile));
     localStorage.setItem('userName', profile.name);
+    try {
+      const token = localStorage.getItem('token');
+      await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5000/api') + '/auth/me', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ full_name: profile.name, phone: profile.phone, gender: profile.gender, dob: profile.dateOfBirth }),
+      });
+    } catch(e) { console.error(e); }
     setIsEditing(false);
   };
 
