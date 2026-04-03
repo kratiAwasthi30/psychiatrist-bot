@@ -55,6 +55,7 @@ const UserProfile = () => {
   });
 
   useEffect(() => {
+    const fetchUser = async () => {
     const token = localStorage.getItem('token');
     // Fetch real user data from DB
     if (token) {
@@ -74,6 +75,8 @@ const UserProfile = () => {
       } catch(e) { console.error(e); }
     }
     const storedProfile = localStorage.getItem('userProfile');
+    };
+    fetchUser();
     if (storedProfile) {
       setProfile(JSON.parse(storedProfile));
     } else {
