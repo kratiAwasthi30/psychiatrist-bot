@@ -204,11 +204,11 @@ const RelaxMusic = () => {
               <div className="flex flex-col md:flex-row items-center gap-6">
                 {/* Main controls */}
                 <div className="flex items-center gap-4">
-                  <Button variant="ghost" size="icon">
+                  <Button variant="ghost" size="icon" onClick={handleShuffle}>
                     <Shuffle className="w-4 h-4" />
                   </Button>
-                  <Button variant="ghost" size="icon">
-                    <SkipBack className="w-5 h-5" onClick={handlePrev} style={{cursor:'pointer'}} />
+                  <Button variant="ghost" size="icon" onClick={handlePrev}>
+                    <SkipBack className="w-5 h-5" />
                   </Button>
                   <Button
                     variant="hero"
@@ -222,8 +222,8 @@ const RelaxMusic = () => {
                       <Play className="w-6 h-6 ml-1" />
                     )}
                   </Button>
-                  <Button variant="ghost" size="icon">
-                    <SkipForward className="w-5 h-5" onClick={handleNext} style={{cursor:'pointer'}} />
+                  <Button variant="ghost" size="icon" onClick={handleNext}>
+                    <SkipForward className="w-5 h-5" />
                   </Button>
                   <Button variant="ghost" size="icon">
                     <Repeat className="w-4 h-4" />
