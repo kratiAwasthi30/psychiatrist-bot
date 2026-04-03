@@ -13,5 +13,6 @@
       "visibility": "public"
     }
   },
-  "postStartCommand": "bash /workspaces/psychiatrist-bot/start.sh"
+  "onCreateCommand": "sudo apt-get update && sudo apt-get install -y mysql-server && sudo service mysql start && sudo mysql -e \"ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'mindcare123'; FLUSH PRIVILEGES;\" && mysql -u root -pmindcare123 -e \"CREATE DATABASE IF NOT EXISTS mindcare_ai;\" && cd /workspaces/psychiatrist-bot/backend && npm install",
+  "postStartCommand": "sudo service mysql start && cd /workspaces/psychiatrist-bot/backend && node server.js > /tmp/backend.log 2>&1 & cd /workspaces/psychiatrist-bot && npm run dev > /tmp/frontend.log 2>&1 &"
 }

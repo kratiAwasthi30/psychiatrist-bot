@@ -1,114 +1,61 @@
-
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const { authenticate } = require('../middleware/auth');
 
-// Log stress level
 router.post('/log', authenticate, async (req, res) => {
-    try {
-        const { stressLevel, mood, notes, triggers, activityContext } = req.body;
-        const userId = req.user.userId;
-
-        await db.query(
-            `INSERT INTO stress_levels 
-            (user_id, stress_level, mood, notes, triggers, activity_context, recorded_date, recorded_time)
-            VALUES (?, ?, ?, ?, ?, ?, CURDATE(), CURTIME())`,
-            [userId, stressLevel, mood, notes, triggers, activityContext]
-        );
-
-        res.json({ 
-            success: true, 
-            message: 'Stress level logged' 
-        });
-    } catch (error) {
-        console.error('Log stress error:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Failed to log stress level' 
-        });
-    }
+  try {
+    const { stressLevel, mood, notes } = req.body;
+    await db.query(
+      'INSERT INTO stress_logs (user_id, stress_level, mood, notes) VALUES (?, ?, ?, ?)',
+      [req.user.userId, stressLevel, mood, notes || '']
+    );
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 });
 
-// Get stress history
 router.get('/history', authenticate, async (req, res) => {
-    try {
-        const userId = req.user.userId;
-        const { days = 30 } = req.query;
-
-        const [history] = await db.query(
-            `SELECT * FROM stress_levels 
-            WHERE user_id = ? 
-            AND recorded_date >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-            ORDER BY recorded_date DESC, recorded_time DESC`,
-            [userId, parseInt(days)]
-        );
-
-        res.json({ success: true, data: history });
-    } catch (error) {
-        console.error('Get history error:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Failed to fetch history' 
-        });
-    }
+  try {
+    const [logs] = await db.query(
+      'SELECT stress_level, mood, logged_at FROM stress_logs WHERE user_id = ? ORDER BY logged_at DESC LIMIT 14',
+      [req.user.userId]
+    );
+    res.json({ success: true, data: logs });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 });
 
-// Get weekly stats
 router.get('/weekly', authenticate, async (req, res) => {
-    try {
-        const userId = req.user.userId;
-
-        const [weeklyData] = await db.query(
-            `SELECT 
-                DATE_FORMAT(recorded_date, '%a') as day,
-                DATE_FORMAT(recorded_date, '%Y-%m-%d') as date,
-                AVG(stress_level) as avg_stress,
-                MIN(stress_level) as min_stress,
-                MAX(stress_level) as max_stress,
-                COUNT(*) as entries
-            FROM stress_levels
-            WHERE user_id = ?
-            AND recorded_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
-            GROUP BY recorded_date
-            ORDER BY recorded_date`,
-            [userId]
-        );
-
-        res.json({ success: true, data: weeklyData });
-    } catch (error) {
-        console.error('Weekly stats error:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Failed to fetch weekly stats' 
-        });
-    }
+  try {
+    const [data] = await db.query(
+      `SELECT DATE_FORMAT(logged_at, '%a') as day,
+       ROUND(AVG(stress_level)) as avg_stress,
+       COUNT(*) as entries
+       FROM stress_logs
+       WHERE user_id = ? AND logged_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+       GROUP BY DATE(logged_at)
+       ORDER BY logged_at`,
+      [req.user.userId]
+    );
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 });
 
-// Get current stress level
 router.get('/current', authenticate, async (req, res) => {
-    try {
-        const userId = req.user.userId;
-
-        const [current] = await db.query(
-            `SELECT * FROM stress_levels 
-            WHERE user_id = ? 
-            ORDER BY recorded_date DESC, recorded_time DESC 
-            LIMIT 1`,
-            [userId]
-        );
-
-        res.json({ 
-            success: true, 
-            data: current.length > 0 ? current[0] : null 
-        });
-    } catch (error) {
-        console.error('Current stress error:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Failed to fetch current stress' 
-        });
-    }
+  try {
+    const [current] = await db.query(
+      'SELECT * FROM stress_logs WHERE user_id = ? ORDER BY logged_at DESC LIMIT 1',
+      [req.user.userId]
+    );
+    res.json({ success: true, data: current.length > 0 ? current[0] : null });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 });
 
 module.exports = router;

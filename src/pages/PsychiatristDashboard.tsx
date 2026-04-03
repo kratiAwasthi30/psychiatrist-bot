@@ -1,355 +1,215 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Navbar from '@/components/Navbar';
-import EmergencyAlerts from '@/components/dashboard/EmergencyAlerts';
-import UpcomingAppointments from '@/components/dashboard/UpcomingAppointments';
-import PatientList from '@/components/dashboard/PatientList';
-import StatsCards from '@/components/dashboard/StatsCards';
-import QuickActions from '@/components/dashboard/QuickActions';
-import RecentMessages from '@/components/dashboard/RecentMessages';
-import {
-  Calendar,
-  MessageCircle,
-  Bell,
-  Settings,
-  RefreshCw,
-  Loader2,
-} from 'lucide-react';
-import { 
-  Patient, 
-  EmergencyAlert, 
-  Appointment, 
-  Message, 
-  DashboardStats,
-  QuickActionType 
-} from '@/types';
+import { Users, AlertTriangle, TrendingUp, MessageCircle, Search, Eye } from 'lucide-react';
 
-// ============ MOCK DATA ============
-
-const initialEmergencyAlerts: EmergencyAlert[] = [
-  {
-    id: 'alert-1',
-    patientId: 'p-3',
-    patientName: 'Emily Davis',
-    avatar: '👩‍🦰',
-    phone: '+1 (555) 123-4567',
-    alertType: 'crisis',
-    severity: 'critical',
-    message: 'Patient reported severe anxiety attack. Immediate attention required.',
-    timestamp: '10 minutes ago',
-    acknowledged: false,
-  },
-  {
-    id: 'alert-2',
-    patientId: 'p-7',
-    patientName: 'Marcus Thompson',
-    avatar: '👨‍🦲',
-    phone: '+1 (555) 234-5678',
-    alertType: 'self-harm-risk',
-    severity: 'critical',
-    message: 'Self-harm indicators detected in recent chat messages.',
-    timestamp: '25 minutes ago',
-    acknowledged: false,
-  },
-  {
-    id: 'alert-3',
-    patientId: 'p-12',
-    patientName: 'Jessica Miller',
-    avatar: '👩',
-    phone: '+1 (555) 345-6789',
-    alertType: 'missed-session',
-    severity: 'high',
-    message: 'Missed 3 consecutive therapy sessions without notice.',
-    timestamp: '1 hour ago',
-    acknowledged: false,
-  },
-];
-
-const initialAppointments: Appointment[] = [
-  { id: 'apt-1', patientId: 'p-1', patientName: 'Sarah Johnson', avatar: '👩', type: 'video', time: '09:00 AM', duration: 60, status: 'scheduled' },
-  { id: 'apt-2', patientId: 'p-2', patientName: 'Mike Chen', avatar: '👨', type: 'in-person', time: '10:30 AM', duration: 45, status: 'scheduled' },
-  { id: 'apt-3', patientId: 'p-4', patientName: 'James Wilson', avatar: '👴', type: 'video', time: '11:30 AM', duration: 60, status: 'scheduled' },
-  { id: 'apt-4', patientId: 'p-5', patientName: 'Lisa Anderson', avatar: '👱‍♀️', type: 'phone', time: '01:00 PM', duration: 30, status: 'scheduled' },
-];
-
-const initialPatients: Patient[] = [
-  { id: 'p-1', name: 'Sarah Johnson', age: 28, phone: '+1 (555) 100-0001', email: 'sarah.j@email.com', stressLevel: 35, lastSession: '2 hours ago', lastCheckIn: 'Today', status: 'stable', avatar: '👩', notes: 'Making good progress with anxiety management', riskLevel: 'low', conditions: ['Anxiety', 'Insomnia'] },
-  { id: 'p-2', name: 'Mike Chen', age: 34, phone: '+1 (555) 100-0002', email: 'mike.c@email.com', stressLevel: 72, lastSession: '1 day ago', lastCheckIn: 'Yesterday', status: 'monitoring', avatar: '👨', notes: 'Work-related stress increasing', riskLevel: 'medium', conditions: ['Depression', 'Work Stress'] },
-  { id: 'p-3', name: 'Emily Davis', age: 45, phone: '+1 (555) 123-4567', email: 'emily.d@email.com', stressLevel: 88, lastSession: '3 hours ago', lastCheckIn: 'Today', status: 'critical', avatar: '👩‍🦰', notes: 'Requires immediate follow-up', riskLevel: 'high', conditions: ['Severe Anxiety', 'Panic Disorder'] },
-  { id: 'p-4', name: 'James Wilson', age: 52, phone: '+1 (555) 100-0004', email: 'james.w@email.com', stressLevel: 45, lastSession: '5 hours ago', lastCheckIn: 'Today', status: 'stable', avatar: '👴', notes: 'Stable, maintaining therapy schedule', riskLevel: 'low', conditions: ['Mild Depression'] },
-  { id: 'p-5', name: 'Lisa Anderson', age: 31, phone: '+1 (555) 100-0005', email: 'lisa.a@email.com', stressLevel: 65, lastSession: '1 day ago', lastCheckIn: 'Yesterday', status: 'monitoring', avatar: '👱‍♀️', notes: 'Relationship issues ongoing', riskLevel: 'medium', conditions: ['Anxiety', 'Relationship Issues'] },
-];
-
-const initialMessages: Message[] = [
-  { id: 'msg-1', patientId: 'p-3', patientName: 'Emily Davis', avatar: '👩‍🦰', content: 'I\'m having a really difficult day. Can we talk soon?', timestamp: '5 minutes ago', read: false, priority: 'urgent' },
-  { id: 'msg-2', patientId: 'p-7', patientName: 'Marcus Thompson', avatar: '👨‍🦲', content: 'Thank you for checking in. I\'m feeling a bit better today.', timestamp: '15 minutes ago', read: false, priority: 'normal' },
-  { id: 'msg-3', patientId: 'p-1', patientName: 'Sarah Johnson', avatar: '👩', content: 'Just completed my breathing exercises. Feeling calmer now.', timestamp: '30 minutes ago', read: false, priority: 'low' },
-];
-
-// ============ COMPONENT ============
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const PsychiatristDashboard = () => {
   const navigate = useNavigate();
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [emergencyAlerts, setEmergencyAlerts] = useState<EmergencyAlert[]>(initialEmergencyAlerts);
-  const [appointments, setAppointments] = useState<Appointment[]>(initialAppointments);
-  const [patients, setPatients] = useState<Patient[]>(initialPatients);
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [patients, setPatients] = useState<any[]>([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({ total: 0, highStress: 0, active: 0 });
+  const [selectedPatient, setSelectedPatient] = useState<any>(null);
+  const token = localStorage.getItem('token');
+  const doctorName = localStorage.getItem('userName') || 'Doctor';
 
-  // Calculate stats
-  const stats: DashboardStats = {
-    activePatients: patients.length,
-    todayAppointments: appointments.filter(a => a.status === 'scheduled').length,
-    pendingMessages: messages.filter(m => !m.read).length,
-    criticalAlerts: emergencyAlerts.length,
-    completedSessions: 12,
-    averageStress: Math.round(patients.reduce((sum, p) => sum + p.stressLevel, 0) / patients.length),
+  useEffect(() => { fetchPatients(); }, []);
+
+  const fetchPatients = async () => {
+    try {
+      const res = await fetch(`${API_URL}/users/all`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        const users = data.data.filter((u: any) => u.role === 'user');
+        setPatients(users);
+        setStats({
+          total: users.length,
+          highStress: users.filter((u: any) => u.latest_stress > 60).length,
+          active: users.filter((u: any) => u.is_active).length,
+        });
+      }
+    } catch (e) { console.error(e); }
+    setLoading(false);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('userRole');
-    localStorage.removeItem('userName');
-    navigate('/');
+  const getStressColor = (level: number) => {
+    if (!level) return 'bg-gray-100 text-gray-600';
+    if (level <= 30) return 'bg-green-100 text-green-700';
+    if (level <= 60) return 'bg-yellow-100 text-yellow-700';
+    return 'bg-red-100 text-red-700';
   };
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsRefreshing(false);
+  const getStressLabel = (level: number) => {
+    if (!level) return 'No data';
+    if (level <= 30) return 'Low';
+    if (level <= 60) return 'Moderate';
+    return 'High';
   };
 
-  // ========== UPDATED NAVIGATION HANDLERS ==========
+  const filtered = patients.filter(p =>
+    p.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+    p.email?.toLowerCase().includes(search.toLowerCase())
+  );
 
-  const handleStatClick = (statType: string) => {
-    switch(statType) {
-      case 'patients':
-        navigate('/psychiatrist/patients');
-        break;
-      case 'appointments':
-        navigate('/psychiatrist/schedule');
-        break;
-      case 'messages':
-        navigate('/psychiatrist/messages');
-        break;
-      case 'alerts':
-        navigate('/psychiatrist/notifications');
-        break;
-    }
-  };
-
-  const handleScheduleClick = () => {
-    navigate('/psychiatrist/schedule');
-  };
-
-  const handleMessagesClick = () => {
-    navigate('/psychiatrist/messages');
-  };
-
-  const handleNotificationsClick = () => {
-    navigate('/psychiatrist/notifications');
-  };
-
-  const handleSettingsClick = () => {
-    navigate('/psychiatrist/settings');
-  };
-
-  // Emergency Alert handlers
-  const handleAcknowledgeAlert = (alertId: string) => {
-    setEmergencyAlerts(prev => prev.filter(a => a.id !== alertId));
-  };
-
-  const handleCallPatient = (alert: EmergencyAlert) => {
-    window.location.href = `tel:${alert.phone}`;
-  };
-
-  const handleViewAlertDetails = (alert: EmergencyAlert) => {
-    navigate(`/psychiatrist/alert/${alert.id}`);
-  };
-
-  // Appointment handlers
-  const handleJoinCall = (appointment: Appointment) => {
-    setAppointments(prev => 
-      prev.map(a => a.id === appointment.id ? { ...a, status: 'in-progress' as const } : a)
-    );
-    navigate(`/psychiatrist/session/${appointment.id}`);
-  };
-
-  const handleStartSession = (appointment: Appointment) => {
-    setAppointments(prev => 
-      prev.map(a => a.id === appointment.id ? { ...a, status: 'in-progress' as const } : a)
-    );
-    navigate(`/psychiatrist/session/${appointment.id}`);
-  };
-
-  const handleViewAllAppointments = () => {
-    navigate('/psychiatrist/schedule');
-  };
-
-  // Patient handlers
-  const handleViewPatientDetails = (patient: Patient) => {
-    navigate(`/psychiatrist/patient/${patient.id}`);
-  };
-
-  const handleSendMessage = (patient: Patient) => {
-    navigate(`/psychiatrist/messages?patient=${patient.id}`);
-  };
-
-  const handleAddNote = (patient: Patient) => {
-    navigate(`/psychiatrist/notes/${patient.id}`);
-  };
-
-  const handleUpdatePatientStatus = (patient: Patient, newStatus: Patient['status']) => {
-    setPatients(prev =>
-      prev.map(p => p.id === patient.id ? { ...p, status: newStatus } : p)
-    );
-  };
-
-  // Message handlers
-  const handleMarkAsRead = (messageId: string) => {
-    setMessages(prev =>
-      prev.map(m => m.id === messageId ? { ...m, read: true } : m)
-    );
-  };
-
-  const handleReplyMessage = (message: Message) => {
-    navigate(`/psychiatrist/messages?conversation=${message.patientId}`);
-  };
-
-  const handleViewAllMessages = () => {
-    navigate('/psychiatrist/messages');
-  };
-
-  // Quick Action handlers
-  const handleQuickAction = (action: QuickActionType) => {
-    switch(action) {
-      case 'appointments':
-        navigate('/psychiatrist/schedule?new=true');
-        break;
-      case 'messages':
-        navigate('/psychiatrist/messages');
-        break;
-      case 'patients':
-        navigate('/psychiatrist/patients');
-        break;
-      case 'reports':
-        navigate('/psychiatrist/reports');
-        break;
-        case 'settings':
-          navigate('/psychiatrist/settings');
-          break;
-    }
-  };
+  const handleLogout = () => { localStorage.clear(); navigate('/'); };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background">
       <Navbar userRole="psychiatrist" onLogout={handleLogout} />
+      <main className="container mx-auto px-4 py-6 max-w-6xl">
 
-      <main className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-8 fade-in-up">
-          <div>
-            <h1 className="font-serif text-3xl font-bold text-foreground">
-              Welcome back, Dr. Jaya
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Here's what's happening with your patients today
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Button 
-              variant="ghost" 
-              size="sm"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-            >
-              {isRefreshing ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <RefreshCw className="w-4 h-4" />
-              )}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={handleNotificationsClick}>
-              <Bell className="w-4 h-4" />
-              {stats.criticalAlerts > 0 && (
-                <span className="ml-1 w-5 h-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center">
-                  {stats.criticalAlerts}
-                </span>
-              )}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={handleSettingsClick}>
-              <Settings className="w-4 h-4" />
-            </Button>
-            <Button variant="outline" onClick={handleScheduleClick}>
-              <Calendar className="w-4 h-4 mr-2" />
-              Schedule
-            </Button>
-            <Button variant="default" onClick={handleMessagesClick}>
-              <MessageCircle className="w-4 h-4 mr-2" />
-              Messages
-              {stats.pendingMessages > 0 && (
-                <span className="ml-1 px-2 py-0.5 bg-primary-foreground/20 text-primary-foreground text-xs rounded-full">
-                  {stats.pendingMessages}
-                </span>
-              )}
-            </Button>
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="mb-6">
-          <QuickActions 
-            onAction={handleQuickAction}
-            unreadMessages={stats.pendingMessages}
-            pendingAppointments={stats.todayAppointments}
-          />
-        </div>
-
-        {/* Emergency Alerts */}
-        <div className="mb-6">
-          <EmergencyAlerts
-            alerts={emergencyAlerts}
-            onAcknowledge={handleAcknowledgeAlert}
-            onCallPatient={handleCallPatient}
-            onViewDetails={handleViewAlertDetails}
-          />
-        </div>
-
-        {/* Stats Cards */}
         <div className="mb-8">
-          <StatsCards 
-            stats={stats} 
-            onStatClick={handleStatClick} 
-          />
+          <h1 className="text-3xl font-serif font-bold">Welcome, Dr. {doctorName} 👨‍⚕️</h1>
+          <p className="text-muted-foreground mt-1">Monitor your patients and manage their mental health journey</p>
         </div>
 
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
-          {/* Appointments */}
-          <UpcomingAppointments
-            appointments={appointments}
-            onJoinCall={handleJoinCall}
-            onStartSession={handleStartSession}
-            onViewAll={handleViewAllAppointments}
-          />
+        {/* Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
+                <Users className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{stats.total}</p>
+                <p className="text-sm text-muted-foreground">Total Patients</p>
+              </div>
+            </CardContent>
+          </Card>
 
-          {/* Messages */}
-          <RecentMessages
-            messages={messages}
-            onMarkAsRead={handleMarkAsRead}
-            onReply={handleReplyMessage}
-            onViewAll={handleViewAllMessages}
-          />
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{stats.highStress}</p>
+                <p className="text-sm text-muted-foreground">High Stress</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
+                <TrendingUp className="w-6 h-6 text-green-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{stats.active}</p>
+                <p className="text-sm text-muted-foreground">Active Users</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Patient List */}
-        <PatientList
-          patients={patients}
-          onViewDetails={handleViewPatientDetails}
-          onSendMessage={handleSendMessage}
-          onAddNote={handleAddNote}
-          onUpdateStatus={handleUpdatePatientStatus}
-        />
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <CardTitle>Patient List</CardTitle>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search patients..."
+                  className="pl-9 pr-4 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 w-64"
+                />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="flex items-center justify-center h-40">
+                <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <p>No patients found</p>
+                <p className="text-xs mt-1">Patients will appear here once they register</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filtered.map(patient => (
+                  <div key={patient.user_id}
+                    className="flex items-center justify-between p-4 rounded-xl border border-border hover:border-primary/40 hover:bg-primary/5 transition-all cursor-pointer"
+                    onClick={() => setSelectedPatient(selectedPatient?.user_id === patient.user_id ? null : patient)}>
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-semibold text-primary">
+                        {patient.full_name?.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">{patient.full_name}</p>
+                        <p className="text-sm text-muted-foreground">{patient.email}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={`text-xs font-medium px-3 py-1 rounded-full ${getStressColor(patient.latest_stress)}`}>
+                        {getStressLabel(patient.latest_stress)} {patient.latest_stress ? `(${patient.latest_stress})` : ''}
+                      </span>
+                      <span className={`text-xs px-2 py-1 rounded-full ${patient.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                        {patient.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                      <Eye className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Patient Detail Panel */}
+        {selectedPatient && (
+          <Card className="mt-6 border-primary/30">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-semibold text-primary">
+                  {selectedPatient.full_name?.charAt(0).toUpperCase()}
+                </div>
+                {selectedPatient.full_name} — Detail View
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-background rounded-xl p-4 border border-border">
+                  <p className="text-xs text-muted-foreground">Email</p>
+                  <p className="text-sm font-medium mt-1">{selectedPatient.email}</p>
+                </div>
+                <div className="bg-background rounded-xl p-4 border border-border">
+                  <p className="text-xs text-muted-foreground">Role</p>
+                  <p className="text-sm font-medium mt-1 capitalize">{selectedPatient.role}</p>
+                </div>
+                <div className="bg-background rounded-xl p-4 border border-border">
+                  <p className="text-xs text-muted-foreground">Latest Stress</p>
+                  <p className={`text-sm font-semibold mt-1 ${selectedPatient.latest_stress > 60 ? 'text-red-500' : selectedPatient.latest_stress > 30 ? 'text-yellow-500' : 'text-green-500'}`}>
+                    {selectedPatient.latest_stress || 'No data'}
+                  </p>
+                </div>
+                <div className="bg-background rounded-xl p-4 border border-border">
+                  <p className="text-xs text-muted-foreground">Joined</p>
+                  <p className="text-sm font-medium mt-1">{new Date(selectedPatient.created_at).toLocaleDateString()}</p>
+                </div>
+              </div>
+              <div className="flex gap-3 mt-4">
+                <Button size="sm" variant="outline" className="flex items-center gap-2">
+                  <MessageCircle className="w-4 h-4" /> Message
+                </Button>
+                <Button size="sm" variant="outline" className="flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4" /> View Reports
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
       </main>
     </div>
   );
