@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -12,237 +12,129 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import AnimatedBot from '@/components/AnimatedBot';
-import { Brain, Mail, Lock, ArrowLeft, User, Stethoscope, Settings, Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Brain, Mail, Lock, ArrowLeft, User, Stethoscope, Settings, Eye, EyeOff } from 'lucide-react';
+import { authAPI } from '@/lib/api';
 
 type UserRole = 'user' | 'psychiatrist' | 'admin';
 type Mode = 'login' | 'signup' | 'forgot' | 'sent';
 
-// ─────────────────────────────────────────────
-// Validation rules (single source of truth)
-// ─────────────────────────────────────────────
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PASSWORD_MIN = 6;
-
-const validators: Record<string, (val: string, extra?: string) => string> = {
-  email: (v) =>
-    !v ? 'Email is required' : !EMAIL_RE.test(v) ? 'Enter a valid email address' : '',
-  forgotEmail: (v) =>
-    !v ? 'Email is required' : !EMAIL_RE.test(v) ? 'Enter a valid email address' : '',
-  password: (v) =>
-    !v ? 'Password is required' : v.length < PASSWORD_MIN ? `Password must be at least ${PASSWORD_MIN} characters` : '',
-  confirmPassword: (v, password) =>
-    !v ? 'Please confirm your password' : v !== password ? 'Passwords do not match' : '',
-  name: (v) =>
-    !v.trim() ? 'Full name is required' : v.trim().length < 2 ? 'Name must be at least 2 characters' : '',
-};
-
-// Validate a single field and return error string ('' = valid)
-function validateField(field: string, value: string, extra?: string): string {
-  return validators[field]?.(value, extra) ?? '';
-}
-
-// Validate all fields for a given mode
-function validateAll(mode: Mode, fields: {
-  email: string; password: string; confirmPassword: string;
-  name: string; forgotEmail: string;
-}): Record<string, string> {
-  const e: Record<string, string> = {};
-  if (mode === 'forgot') {
-    const err = validateField('forgotEmail', fields.forgotEmail);
-    if (err) e.forgotEmail = err;
-    return e;
-  }
-  const emailErr = validateField('email', fields.email);
-  if (emailErr) e.email = emailErr;
-  const pwErr = validateField('password', fields.password);
-  if (pwErr) e.password = pwErr;
-  if (mode === 'signup') {
-    const nameErr = validateField('name', fields.name);
-    if (nameErr) e.name = nameErr;
-    const cpErr = validateField('confirmPassword', fields.confirmPassword, fields.password);
-    if (cpErr) e.confirmPassword = cpErr;
-  }
-  return e;
-}
-
-// ─────────────────────────────────────────────
-// Small UI helpers
-// ─────────────────────────────────────────────
-
-/** Inline error message shown below a field */
-const FieldError = ({ message }: { message?: string }) =>
-  message ? (
-    <p role="alert" className="flex items-center gap-1 text-red-500 text-xs mt-1 animate-in fade-in slide-in-from-top-1 duration-200">
-      <AlertCircle className="w-3 h-3 shrink-0" />
-      {message}
-    </p>
-  ) : null;
-
-/** Green success tick shown when a field is valid and touched */
-const FieldSuccess = ({ show }: { show: boolean }) =>
-  show ? (
-    <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-      <CheckCircle2 className="w-4 h-4 text-green-500 animate-in fade-in duration-200" />
-    </span>
-  ) : null;
-
-// ─────────────────────────────────────────────
-// Component
-// ─────────────────────────────────────────────
 const Login = () => {
   const navigate = useNavigate();
-
-  // ── mode ──
   const [mode, setMode] = useState<Mode>('login');
-
-  // ── form fields ──
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [role, setRole] = useState<UserRole>('user');
   const [name, setName] = useState('');
   const [forgotEmail, setForgotEmail] = useState('');
-
-  // ── UI state ──
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  /**
-   * errors  – field-level error messages (shown after blur or submit)
-   * touched – which fields the user has interacted with
-   */
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [touched, setTouched] = useState<Record<string, boolean>>({});
-
   const [loading, setLoading] = useState(false);
+  const [apiError, setApiError] = useState('');
 
-  // ── helpers ──
   const switchMode = (m: Mode) => {
     setMode(m);
     setErrors({});
-    setTouched({});
+    setApiError('');
     setShowPassword(false);
     setShowConfirmPassword(false);
   };
 
-  /**
-   * Mark a field as touched and immediately validate it (blur behaviour).
-   * Also clears the error for that field if it's now valid (real-time clear).
-   */
-  const handleBlur = useCallback(
-    (field: string, value: string) => {
-      setTouched((t) => ({ ...t, [field]: true }));
-      const err = validateField(
-        field,
-        value,
-        field === 'confirmPassword' ? password : undefined
-      );
-      setErrors((e) => ({ ...e, [field]: err }));
-    },
-    [password]
-  );
-
-  /**
-   * Called on every keystroke — clears the error for that field once
-   * the value becomes valid (real-time feedback), but doesn't add new
-   * errors until the field has been blurred at least once.
-   */
-  const handleChange = useCallback(
-    (field: string, value: string) => {
-      // Only show real-time clearing/feedback if field was already touched
-      if (touched[field]) {
-        const err = validateField(
-          field,
-          value,
-          field === 'confirmPassword' ? password : undefined
-        );
-        setErrors((e) => ({ ...e, [field]: err }));
-      }
-    },
-    [touched, password]
-  );
-
-  // Convenience setter + change handler combined
-  const makeHandler = (
-    setter: React.Dispatch<React.SetStateAction<string>>,
-    field: string
-  ) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    setter(e.target.value);
-    handleChange(field, e.target.value);
-  };
-
-  // Also re-validate confirmPassword whenever password changes (signup only)
-  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setPassword(val);
-    handleChange('password', val);
-    // Re-validate confirm if already touched
-    if (touched.confirmPassword) {
-      const cpErr = validateField('confirmPassword', confirmPassword, val);
-      setErrors((prev) => ({ ...prev, confirmPassword: cpErr }));
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // Touch all relevant fields so errors appear on submit
-    const allFields =
-      mode === 'forgot'
-        ? ['forgotEmail']
-        : mode === 'signup'
-        ? ['email', 'password', 'confirmPassword', 'name']
-        : ['email', 'password'];
-
-    setTouched(Object.fromEntries(allFields.map((f) => [f, true])));
-
-    const errs = validateAll(mode, { email, password, confirmPassword, name, forgotEmail });
-    setErrors(errs);
-    if (Object.keys(errs).length) return;
-
+  const validate = () => {
+    const e: Record<string, string> = {};
     if (mode === 'forgot') {
-      setLoading(true);
-      // 🔁 Replace with: await fetch('/api/auth/forgot-password', { method:'POST', body: JSON.stringify({ email: forgotEmail }) })
-      setTimeout(() => { setLoading(false); setMode('sent'); }, 1400);
-      return;
+      if (!forgotEmail) e.forgotEmail = 'Email is required';
+      else if (!/\S+@\S+\.\S+/.test(forgotEmail)) e.forgotEmail = 'Enter a valid email';
+      return e;
     }
+    if (!email) e.email = 'Email is required';
+    else if (!/\S+@\S+\.\S+/.test(email)) e.email = 'Enter a valid email';
+    if (!password) e.password = 'Password is required';
+    else if (password.length < 6) e.password = 'Minimum 6 characters';
+    if (mode === 'signup') {
+      if (!name) e.name = 'Full name is required';
+      if (!confirmPassword) e.confirmPassword = 'Please confirm your password';
+      else if (confirmPassword !== password) e.confirmPassword = 'Passwords do not match';
+    }
+    return e;
+  };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const errs = validate();
+    setErrors(errs);
+    setApiError('');
+    if (Object.keys(errs).length) return;
     setLoading(true);
-    // 🔁 Replace with real API call:
-    // const res = await fetch('/api/auth/login', { method:'POST', body: JSON.stringify({ email, password, role }) })
-    // const data = await res.json()
-    // if (!res.ok) { setErrors({ email: data.message }); return; }
-    // localStorage.setItem('token', data.token)
-    setTimeout(() => {
-      setLoading(false);
-      localStorage.setItem('userRole', role);
-      localStorage.setItem('userName', name || email.split('@')[0]);
+
+    try {
+      if (mode === 'forgot') {
+        await authAPI.forgotPassword(forgotEmail);
+        setMode('sent');
+        setLoading(false);
+        return;
+      }
+
+      if (mode === 'signup') {
+        const res = await authAPI.register({
+          email,
+          password,
+          fullName: name,
+          role,
+        });
+        if (!res.success) {
+          setApiError(res.message || 'Registration failed');
+          setLoading(false);
+          return;
+        }
+        // Auto login after register
+        const loginRes = await authAPI.login({ email, password, role });
+        if (loginRes.success) {
+          localStorage.setItem('token', loginRes.token);
+          localStorage.setItem('user', JSON.stringify(loginRes.user));
+          localStorage.setItem('userRole', loginRes.user.role);
+          localStorage.setItem('userName', loginRes.user.fullName);
+        }
+      } else {
+        const res = await authAPI.login({ email, password, role });
+        if (!res.success) {
+          setApiError(res.message || 'Invalid email or password');
+          setLoading(false);
+          return;
+        }
+        localStorage.setItem('token', res.token);
+        localStorage.setItem('user', JSON.stringify(res.user));
+        localStorage.setItem('userRole', res.user.role);
+        localStorage.setItem('userName', res.user.fullName);
+      }
+
+      // Navigate based on role
       switch (role) {
         case 'psychiatrist': navigate('/psychiatrist'); break;
         case 'admin': navigate('/admin'); break;
         default: navigate('/dashboard');
       }
-    }, 1400);
+    } catch (err) {
+      setApiError('Connection error. Make sure the server is running.');
+    }
+    setLoading(false);
   };
 
-  // ── derived helpers ──
-  /** True when a field is touched, has a value, and has no error */
-  const isValid = (field: string, value: string) =>
-    touched[field] && !!value && !errors[field];
+  const roleIcons = {
+    user: User,
+    psychiatrist: Stethoscope,
+    admin: Settings,
+  };
 
-  const roleIcons = { user: User, psychiatrist: Stethoscope, admin: Settings };
   const roleDescriptions = {
     user: 'Access your wellness dashboard, chat with Dr. Mind, and track your progress.',
     psychiatrist: 'Monitor patients, view stress reports, and manage emergency alerts.',
     admin: 'Manage users, psychiatrists, and system settings.',
   };
 
-  // ─────────────────────────────────────────────
-  // JSX
-  // ─────────────────────────────────────────────
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full bg-primary/10 blur-3xl" />
         <div className="absolute -bottom-40 -left-40 w-80 h-80 rounded-full bg-secondary/20 blur-3xl" />
@@ -250,23 +142,21 @@ const Login = () => {
       </div>
 
       <div className="w-full max-w-5xl grid lg:grid-cols-2 gap-8 relative z-10">
-
-        {/* ══ LEFT SIDE (unchanged) ══ */}
+        {/* LEFT SIDE - unchanged */}
         <div className="hidden lg:flex flex-col items-center justify-center text-center space-y-6">
           <Link to="/" className="absolute top-4 left-4 flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="w-4 h-4" />
             Back to home
           </Link>
-
           <AnimatedBot size="xl" mood="happy" className="breathe-animation" />
-
           <div className="space-y-4 max-w-md">
-            <h1 className="font-serif text-4xl font-bold text-foreground">Welcome to MindCare</h1>
+            <h1 className="font-serif text-4xl font-bold text-foreground">
+              Welcome to MindCare
+            </h1>
             <p className="text-lg text-muted-foreground">
               Your journey to better mental health starts here. I'm Dr. Mind, and I'm here to help.
             </p>
           </div>
-
           <Card variant="glass" className="w-full max-w-sm">
             <CardContent className="p-4">
               <div className="flex items-start gap-3">
@@ -287,10 +177,10 @@ const Login = () => {
           </Card>
         </div>
 
-        {/* ══ RIGHT SIDE ══ */}
+        {/* RIGHT SIDE */}
         <Card variant="glass" className="w-full fade-in-up">
 
-          {/* ── FORGOT PASSWORD ── */}
+          {/* FORGOT PASSWORD */}
           {mode === 'forgot' && (
             <>
               <CardHeader className="text-center space-y-2">
@@ -298,40 +188,19 @@ const Login = () => {
                 <CardDescription>Enter your email and we'll send you a reset link.</CardDescription>
               </CardHeader>
               <CardContent>
-                <button
-                  type="button"
-                  onClick={() => switchMode('login')}
-                  className="flex items-center gap-2 text-sm text-primary hover:underline mb-6"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  Back to Sign In
+                <button type="button" onClick={() => switchMode('login')} className="flex items-center gap-2 text-sm text-primary hover:underline mb-6">
+                  <ArrowLeft className="w-4 h-4" /> Back to Sign In
                 </button>
-                <form onSubmit={handleSubmit} className="space-y-5" noValidate>
-                  <div className="space-y-1">
-                    <Label htmlFor="forgotEmail">Email address</Label>
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  <div className="space-y-2">
+                    <Label>Email</Label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                      <Input
-                        id="forgotEmail"
-                        type="email"
-                        placeholder="you@example.com"
-                        value={forgotEmail}
-                        onChange={makeHandler(setForgotEmail, 'forgotEmail')}
-                        onBlur={() => handleBlur('forgotEmail', forgotEmail)}
-                        aria-invalid={!!errors.forgotEmail}
-                        aria-describedby={errors.forgotEmail ? 'forgotEmail-error' : undefined}
-                        className={`pl-10 pr-10 h-12 transition-colors ${
-                          errors.forgotEmail
-                            ? 'border-red-500 focus-visible:ring-red-500'
-                            : isValid('forgotEmail', forgotEmail)
-                            ? 'border-green-500 focus-visible:ring-green-500'
-                            : ''
-                        }`}
-                      />
-                      <FieldSuccess show={isValid('forgotEmail', forgotEmail)} />
+                      <Input type="email" placeholder="you@example.com" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} className={`pl-10 h-12 ${errors.forgotEmail ? 'border-red-500' : ''}`} />
                     </div>
-                    <FieldError message={errors.forgotEmail} />
+                    {errors.forgotEmail && <p className="text-red-500 text-xs">{errors.forgotEmail}</p>}
                   </div>
+                  {apiError && <p className="text-red-500 text-sm text-center">{apiError}</p>}
                   <Button type="submit" variant="hero" className="w-full" disabled={loading}>
                     {loading ? 'Sending…' : 'Send Reset Link'}
                   </Button>
@@ -340,7 +209,7 @@ const Login = () => {
             </>
           )}
 
-          {/* ── EMAIL SENT ── */}
+          {/* EMAIL SENT */}
           {mode === 'sent' && (
             <>
               <CardHeader className="text-center space-y-2">
@@ -364,7 +233,7 @@ const Login = () => {
             </>
           )}
 
-          {/* ── LOGIN & SIGNUP ── */}
+          {/* LOGIN & SIGNUP */}
           {(mode === 'login' || mode === 'signup') && (
             <>
               <CardHeader className="text-center space-y-2">
@@ -375,19 +244,16 @@ const Login = () => {
                   {mode === 'login' ? 'Welcome Back' : 'Create Account'}
                 </CardTitle>
                 <CardDescription>
-                  {mode === 'login'
-                    ? 'Sign in to continue your wellness journey'
-                    : 'Join us and start your path to mental wellness'}
+                  {mode === 'login' ? 'Sign in to continue your wellness journey' : 'Join us and start your path to mental wellness'}
                 </CardDescription>
               </CardHeader>
 
               <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-5" noValidate>
-
-                  {/* Role selector */}
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  {/* Role */}
                   <div className="space-y-2">
-                    <Label htmlFor="role">I am a</Label>
-                    <Select value={role} onValueChange={(v) => setRole(v as UserRole)}>
+                    <Label>I am a</Label>
+                    <Select value={role} onValueChange={(value) => setRole(value as UserRole)}>
                       <SelectTrigger className="h-12">
                         <SelectValue />
                       </SelectTrigger>
@@ -405,192 +271,91 @@ const Login = () => {
                     </Select>
                   </div>
 
-                  {/* Full name — signup only */}
+                  {/* Full name - signup only */}
                   {mode === 'signup' && (
-                    <div className="space-y-1">
-                      <Label htmlFor="name">Full Name</Label>
+                    <div className="space-y-2">
+                      <Label>Full Name</Label>
                       <div className="relative">
                         <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                        <Input
-                          id="name"
-                          type="text"
-                          placeholder="John Doe"
-                          value={name}
-                          onChange={makeHandler(setName, 'name')}
-                          onBlur={() => handleBlur('name', name)}
-                          aria-invalid={!!errors.name}
-                          aria-describedby={errors.name ? 'name-error' : undefined}
-                          className={`pl-10 pr-10 h-12 transition-colors ${
-                            errors.name
-                              ? 'border-red-500 focus-visible:ring-red-500'
-                              : isValid('name', name)
-                              ? 'border-green-500 focus-visible:ring-green-500'
-                              : ''
-                          }`}
-                        />
-                        <FieldSuccess show={isValid('name', name)} />
+                        <Input type="text" placeholder="John Doe" value={name} onChange={(e) => setName(e.target.value)} className={`pl-10 h-12 ${errors.name ? 'border-red-500' : ''}`} />
                       </div>
-                      <FieldError message={errors.name} />
+                      {errors.name && <p className="text-red-500 text-xs">{errors.name}</p>}
                     </div>
                   )}
 
-                  {/* Email — clearly labelled "Email", never "Username" */}
-                  <div className="space-y-1">
-                    <Label htmlFor="email">Email address</Label>
+                  {/* Email */}
+                  <div className="space-y-2">
+                    <Label>Email</Label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                      <Input
-                        id="email"
-                        type="email"
-                        autoComplete="email"
-                        placeholder="you@example.com"
-                        value={email}
-                        onChange={makeHandler(setEmail, 'email')}
-                        onBlur={() => handleBlur('email', email)}
-                        aria-invalid={!!errors.email}
-                        aria-describedby={errors.email ? 'email-error' : undefined}
-                        className={`pl-10 pr-10 h-12 transition-colors ${
-                          errors.email
-                            ? 'border-red-500 focus-visible:ring-red-500'
-                            : isValid('email', email)
-                            ? 'border-green-500 focus-visible:ring-green-500'
-                            : ''
-                        }`}
-                      />
-                      <FieldSuccess show={isValid('email', email)} />
+                      <Input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} className={`pl-10 h-12 ${errors.email ? 'border-red-500' : ''}`} />
                     </div>
-                    <FieldError message={errors.email} />
+                    {errors.email && <p className="text-red-500 text-xs">{errors.email}</p>}
                   </div>
 
-                  {/* Password */}
-                  <div className="space-y-1">
-                    <Label htmlFor="password">Password</Label>
+                  {/* Password + eye icon */}
+                  <div className="space-y-2">
+                    <Label>Password</Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                      <Input
-                        id="password"
-                        type={showPassword ? 'text' : 'password'}
-                        autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                        placeholder="••••••••"
-                        value={password}
-                        onChange={handlePasswordChange}
-                        onBlur={() => handleBlur('password', password)}
-                        aria-invalid={!!errors.password}
-                        aria-describedby={errors.password ? 'password-error' : undefined}
-                        className={`pl-10 pr-10 h-12 transition-colors ${
-                          errors.password
-                            ? 'border-red-500 focus-visible:ring-red-500'
-                            : isValid('password', password)
-                            ? 'border-green-500 focus-visible:ring-green-500'
-                            : ''
-                        }`}
-                      />
-                      {/* Eye toggle — only on the right when no success tick */}
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                      >
+                      <Input type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className={`pl-10 pr-10 h-12 ${errors.password ? 'border-red-500' : ''}`} />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
                         {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                       </button>
                     </div>
-                    {/* Hint shown before interaction; error after */}
-                    {!touched.password && mode === 'signup' && (
-                      <p className="text-xs text-muted-foreground">Minimum {PASSWORD_MIN} characters</p>
-                    )}
-                    <FieldError message={errors.password} />
+                    {errors.password && <p className="text-red-500 text-xs">{errors.password}</p>}
                   </div>
 
-                  {/* Confirm Password — signup only */}
+                  {/* Confirm password - signup only */}
                   {mode === 'signup' && (
-                    <div className="space-y-1">
-                      <Label htmlFor="confirmPassword">Confirm Password</Label>
+                    <div className="space-y-2">
+                      <Label>Confirm Password</Label>
                       <div className="relative">
                         <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                        <Input
-                          id="confirmPassword"
-                          type={showConfirmPassword ? 'text' : 'password'}
-                          autoComplete="new-password"
-                          placeholder="Re-enter password"
-                          value={confirmPassword}
-                          onChange={makeHandler(setConfirmPassword, 'confirmPassword')}
-                          onBlur={() => handleBlur('confirmPassword', confirmPassword)}
-                          aria-invalid={!!errors.confirmPassword}
-                          aria-describedby={errors.confirmPassword ? 'confirmPassword-error' : undefined}
-                          className={`pl-10 pr-10 h-12 transition-colors ${
-                            errors.confirmPassword
-                              ? 'border-red-500 focus-visible:ring-red-500'
-                              : isValid('confirmPassword', confirmPassword)
-                              ? 'border-green-500 focus-visible:ring-green-500'
-                              : ''
-                          }`}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                          aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                        >
+                        <Input type={showConfirmPassword ? 'text' : 'password'} placeholder="Re-enter password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={`pl-10 pr-10 h-12 ${errors.confirmPassword ? 'border-red-500' : ''}`} />
+                        <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
                           {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                         </button>
                       </div>
-                      <FieldError message={errors.confirmPassword} />
+                      {errors.confirmPassword && <p className="text-red-500 text-xs">{errors.confirmPassword}</p>}
                     </div>
                   )}
 
-                  {/* Forgot password — login only */}
+                  {/* Forgot password link */}
                   {mode === 'login' && (
                     <div className="text-right -mt-2">
-                      <button
-                        type="button"
-                        onClick={() => switchMode('forgot')}
-                        className="text-sm text-primary hover:underline"
-                      >
+                      <button type="button" onClick={() => switchMode('forgot')} className="text-sm text-primary hover:underline">
                         Forgot password?
                       </button>
                     </div>
                   )}
 
+                  {/* API error */}
+                  {apiError && <p className="text-red-500 text-sm text-center bg-red-50 p-2 rounded-lg">{apiError}</p>}
+
                   <Button type="submit" variant="hero" className="w-full" disabled={loading}>
-                    {loading
-                      ? (mode === 'login' ? 'Signing in…' : 'Creating account…')
-                      : (mode === 'login' ? 'Sign In' : 'Create Account')}
+                    {loading ? (mode === 'login' ? 'Signing in…' : 'Creating account…') : (mode === 'login' ? 'Sign In' : 'Create Account')}
                   </Button>
 
                   <div className="text-center">
-                    <button
-                      type="button"
-                      onClick={() => switchMode(mode === 'login' ? 'signup' : 'login')}
-                      className="text-sm text-primary hover:underline"
-                    >
-                      {mode === 'login'
-                        ? "Don't have an account? Sign up"
-                        : 'Already have an account? Sign in'}
+                    <button type="button" onClick={() => switchMode(mode === 'login' ? 'signup' : 'login')} className="text-sm text-primary hover:underline">
+                      {mode === 'login' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
                     </button>
                   </div>
-
                 </form>
               </CardContent>
             </>
           )}
-
         </Card>
 
         {/* Mobile back link */}
-        <Link
-          to="/"
-          className="lg:hidden absolute top-4 left-4 flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-        >
+        <Link to="/" className="lg:hidden absolute top-4 left-4 flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="w-4 h-4" />
           Back
         </Link>
-
       </div>
     </div>
   );
 };
 
 export default Login;
-
-
