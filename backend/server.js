@@ -25,7 +25,8 @@ const gameRoutes = require('./routes/games');
 const chatRoutes = require('./routes/chat');
 
 // Routes
-app.use('/api/users', authRoutes);
+const userRoutes = require('./routes/users');
+app.use('/api/users', userRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/stress', stressRoutes);
 app.use('/api/reminders', reminderRoutes);

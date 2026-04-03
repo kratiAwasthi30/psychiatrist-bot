@@ -235,3 +235,70 @@ router.delete('/users/delete/:id', authenticate, async (req, res) => {
 });
 
 module.exports = router;
+
+const nodemailer = require('nodemailer');
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
+// Forgot password - send reset email
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    const [users] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+    if (users.length === 0) {
+      return res.json({ success: true, message: 'If email exists, reset link sent' });
+    }
+    const token = require('crypto').randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 3600000); // 1 hour
+    await db.query(
+      'INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)',
+      [users[0].user_id, token, expires]
+    );
+    const resetLink = `${process.env.CLIENT_FRONTEND_URL}/reset-password?token=${token}`;
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: 'MindCare - Reset Your Password',
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px">
+          <h2 style="color:#6366f1">MindCare Password Reset</h2>
+          <p>Hello,</p>
+          <p>Click the button below to reset your password. This link expires in 1 hour.</p>
+          <a href="${resetLink}" style="background:#6366f1;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;margin:16px 0">Reset Password</a>
+          <p style="color:#888;font-size:12px">If you didn't request this, ignore this email.</p>
+        </div>
+      `,
+    });
+    res.json({ success: true, message: 'Reset link sent to your email' });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Reset password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    const [tokens] = await db.query(
+      'SELECT * FROM password_reset_tokens WHERE token = ? AND used = FALSE AND expires_at > NOW()',
+      [token]
+    );
+    if (tokens.length === 0) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired token' });
+    }
+    const bcrypt = require('bcrypt');
+    const hash = await bcrypt.hash(newPassword, 10);
+    await db.query('UPDATE users SET password_hash = ? WHERE user_id = ?', [hash, tokens[0].user_id]);
+    await db.query('UPDATE password_reset_tokens SET used = TRUE WHERE token = ?', [token]);
+    res.json({ success: true, message: 'Password reset successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
