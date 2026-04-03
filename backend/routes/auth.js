@@ -302,3 +302,17 @@ router.post('/reset-password', async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
+// Get current user
+router.get('/me', authenticate, async (req, res) => {
+  try {
+    const [users] = await db.query(
+      'SELECT user_id, email, full_name, role, is_active, created_at FROM users WHERE user_id = ?',
+      [req.user.userId]
+    );
+    if (users.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
+    res.json({ success: true, user: users[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});

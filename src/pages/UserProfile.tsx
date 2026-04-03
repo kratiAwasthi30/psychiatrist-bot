@@ -55,6 +55,24 @@ const UserProfile = () => {
   });
 
   useEffect(() => {
+    const token = localStorage.getItem('token');
+    // Fetch real user data from DB
+    if (token) {
+      try {
+        const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5000/api') + '/auth/me', {
+          headers: { Authorization: 'Bearer ' + token }
+        });
+        const data = await res.json();
+        if (data.success && data.user) {
+          setProfile(prev => ({
+            ...prev,
+            name: data.user.full_name || '',
+            email: data.user.email || '',
+          }));
+          localStorage.setItem('userName', data.user.full_name || '');
+        }
+      } catch(e) { console.error(e); }
+    }
     const storedProfile = localStorage.getItem('userProfile');
     if (storedProfile) {
       setProfile(JSON.parse(storedProfile));
