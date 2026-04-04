@@ -1,268 +1,159 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Card, CardContent } from '@/components/ui/card';
 import Navbar from '@/components/Navbar';
-import {
-  ArrowLeft,
-  Search,
-  Filter,
-  Users,
-  TrendingUp,
-  AlertTriangle,
-  MessageCircle,
-  FileText,
-} from 'lucide-react';
+import { Users, Search, AlertTriangle, TrendingUp, Eye } from 'lucide-react';
 
-interface Patient {
-  id: string;
-  name: string;
-  age: number;
-  phone: string;
-  email: string;
-  stressLevel: number;
-  lastSession: string;
-  status: 'stable' | 'monitoring' | 'critical' | 'in-session';
-  avatar: string;
-  riskLevel: 'low' | 'medium' | 'high';
-  conditions: string[];
-}
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const PatientManagement = () => {
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [patients, setPatients] = useState<any[]>([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({ total: 0, critical: 0, monitoring: 0, stable: 0 });
+  const token = localStorage.getItem('token');
 
-  const handleLogout = () => {
-    localStorage.removeItem('userRole');
-    localStorage.removeItem('userName');
-    navigate('/');
+  useEffect(() => { fetchPatients(); }, []);
+
+  const fetchPatients = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/users/all`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        const users = data.data.filter((u: any) => u.role === 'user');
+        setPatients(users);
+        setStats({
+          total: users.length,
+          critical: users.filter((u: any) => u.latest_stress > 75).length,
+          monitoring: users.filter((u: any) => u.latest_stress > 40 && u.latest_stress <= 75).length,
+          stable: users.filter((u: any) => !u.latest_stress || u.latest_stress <= 40).length,
+        });
+      }
+    } catch (e) { console.error(e); }
+    setLoading(false);
   };
 
-  const patients: Patient[] = [
-    { id: 'p-1', name: 'Sarah Johnson', age: 28, phone: '+1 (555) 100-0001', email: 'sarah.j@email.com', stressLevel: 35, lastSession: '2 hours ago', status: 'stable', avatar: '👩', riskLevel: 'low', conditions: ['Anxiety', 'Insomnia'] },
-    { id: 'p-2', name: 'Mike Chen', age: 34, phone: '+1 (555) 100-0002', email: 'mike.c@email.com', stressLevel: 72, lastSession: '1 day ago', status: 'monitoring', avatar: '👨', riskLevel: 'medium', conditions: ['Depression'] },
-    { id: 'p-3', name: 'Emily Davis', age: 45, phone: '+1 (555) 123-4567', email: 'emily.d@email.com', stressLevel: 88, lastSession: '3 hours ago', status: 'critical', avatar: '👩‍🦰', riskLevel: 'high', conditions: ['Severe Anxiety'] },
-    { id: 'p-4', name: 'James Wilson', age: 52, phone: '+1 (555) 100-0004', email: 'james.w@email.com', stressLevel: 45, lastSession: '5 hours ago', status: 'stable', avatar: '👴', riskLevel: 'low', conditions: ['Mild Depression'] },
-    { id: 'p-5', name: 'Lisa Anderson', age: 31, phone: '+1 (555) 100-0005', email: 'lisa.a@email.com', stressLevel: 65, lastSession: '1 day ago', status: 'monitoring', avatar: '👱‍♀️', riskLevel: 'medium', conditions: ['Anxiety'] },
-  ];
-
-  const filteredPatients = patients.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter = filterStatus === 'all' || p.status === filterStatus;
-    return matchesSearch && matchesFilter;
-  });
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'critical': return 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300';
-      case 'monitoring': return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300';
-      case 'stable': return 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300';
-      case 'in-session': return 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300';
-      default: return 'bg-gray-100 text-gray-700';
-    }
+  const getStressColor = (level: number) => {
+    if (!level) return 'text-gray-500';
+    if (level > 75) return 'text-red-500';
+    if (level > 40) return 'text-yellow-500';
+    return 'text-green-500';
   };
 
-  const getRiskColor = (risk: string) => {
-    switch (risk) {
-      case 'high': return 'text-red-500';
-      case 'medium': return 'text-yellow-500';
-      case 'low': return 'text-green-500';
-      default: return 'text-gray-500';
-    }
+  const getStatusBadge = (level: number) => {
+    if (!level) return { label: 'No data', class: 'bg-gray-100 text-gray-600' };
+    if (level > 75) return { label: 'critical', class: 'bg-red-100 text-red-700' };
+    if (level > 40) return { label: 'monitoring', class: 'bg-yellow-100 text-yellow-700' };
+    return { label: 'stable', class: 'bg-green-100 text-green-700' };
   };
+
+  const filtered = patients.filter(p =>
+    p.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+    p.email?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleLogout = () => { localStorage.clear(); navigate('/'); };
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar userRole="psychiatrist" onLogout={handleLogout} />
+      <main className="container mx-auto px-4 py-6 max-w-6xl">
 
-      <main className="container mx-auto px-4 py-8">
-        <Button
-          variant="ghost"
-          onClick={() => navigate('/psychiatrist')}
-          className="mb-6 gap-2"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Dashboard
-        </Button>
-
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-8">
+        <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="font-serif text-4xl font-bold text-foreground mb-2">Patient Management</h1>
-            <p className="text-muted-foreground">Manage and monitor your patients</p>
+            <h1 className="text-3xl font-serif font-bold">Patient Management</h1>
+            <p className="text-muted-foreground mt-1">Monitor and manage your patients</p>
           </div>
-          <Button className="gap-2">
-            <Users className="w-4 h-4" />
-            Add New Patient
-          </Button>
         </div>
 
-        {/* Filters */}
-        <Card className="mb-6">
-          <CardContent className="p-4">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Search patients..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-              <div className="flex gap-2">
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="all">All Status</option>
-                  <option value="stable">Stable</option>
-                  <option value="monitoring">Monitoring</option>
-                  <option value="critical">Critical</option>
-                  <option value="in-session">In Session</option>
-                </select>
-                <Button variant="outline" className="gap-2">
-                  <Filter className="w-4 h-4" />
-                  More Filters
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Stats */}
-        <div className="grid md:grid-cols-4 gap-4 mb-6">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Patients</p>
-                  <p className="text-2xl font-bold text-foreground">{patients.length}</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          {[
+            { label: 'Total Patients', value: stats.total, icon: Users, color: 'text-blue-500', bg: 'bg-blue-50' },
+            { label: 'Critical', value: stats.critical, icon: AlertTriangle, color: 'text-red-500', bg: 'bg-red-50' },
+            { label: 'Monitoring', value: stats.monitoring, icon: TrendingUp, color: 'text-yellow-500', bg: 'bg-yellow-50' },
+            { label: 'Stable', value: stats.stable, icon: Users, color: 'text-green-500', bg: 'bg-green-50' },
+          ].map(s => (
+            <Card key={s.label}>
+              <CardContent className="p-5 flex items-center gap-4">
+                <div className={`w-12 h-12 rounded-xl ${s.bg} flex items-center justify-center`}>
+                  <s.icon className={`w-6 h-6 ${s.color}`} />
                 </div>
-                <Users className="w-8 h-8 text-primary" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Critical</p>
-                  <p className="text-2xl font-bold text-red-500">
-                    {patients.filter(p => p.status === 'critical').length}
-                  </p>
+                  <p className="text-2xl font-bold">{s.value}</p>
+                  <p className="text-sm text-muted-foreground">{s.label}</p>
                 </div>
-                <AlertTriangle className="w-8 h-8 text-red-500" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Monitoring</p>
-                  <p className="text-2xl font-bold text-yellow-500">
-                    {patients.filter(p => p.status === 'monitoring').length}
-                  </p>
-                </div>
-                <TrendingUp className="w-8 h-8 text-yellow-500" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Stable</p>
-                  <p className="text-2xl font-bold text-green-500">
-                    {patients.filter(p => p.status === 'stable').length}
-                  </p>
-                </div>
-                <Users className="w-8 h-8 text-green-500" />
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Search */}
+        <div className="relative mb-4">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search patients..."
+            className="w-full pl-9 pr-4 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30" />
         </div>
 
         {/* Patient List */}
         <Card>
-          <CardHeader>
-            <CardTitle>All Patients ({filteredPatients.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {filteredPatients.map((patient) => (
-                <Card
-                  key={patient.id}
-                  className="cursor-pointer hover:shadow-md transition-all"
-                  onClick={() => navigate(`/psychiatrist/patient/${patient.id}`)}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-4">
-                      <div className="text-4xl">{patient.avatar}</div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-semibold text-foreground">{patient.name}</h3>
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(patient.status)}`}>
-                            {patient.status}
-                          </span>
+          <CardContent className="p-0">
+            {loading ? (
+              <div className="flex items-center justify-center h-40">
+                <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="text-center py-16 text-muted-foreground">
+                <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <p>No patients found</p>
+                <p className="text-xs mt-1">Patients will appear here once they register</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {filtered.map(patient => {
+                  const status = getStatusBadge(patient.latest_stress);
+                  return (
+                    <div key={patient.user_id} className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center font-semibold text-primary text-lg">
+                          {patient.full_name?.charAt(0).toUpperCase()}
                         </div>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span>{patient.age} years old</span>
-                          <span>•</span>
-                          <span>{patient.email}</span>
-                          <span>•</span>
-                          <span>Last session: {patient.lastSession}</span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-2">
-                          {patient.conditions.map((condition, idx) => (
-                            <span key={idx} className="px-2 py-0.5 bg-muted rounded text-xs">
-                              {condition}
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-foreground">{patient.full_name}</p>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${status.class}`}>
+                              {status.label}
                             </span>
-                          ))}
+                          </div>
+                          <p className="text-sm text-muted-foreground">{patient.email}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Joined {new Date(patient.created_at).toLocaleDateString()}
+                          </p>
                         </div>
                       </div>
-                      <div className="flex flex-col items-end gap-2">
-                        <div className="flex items-center gap-1">
-                          <span className="text-sm text-muted-foreground">Risk:</span>
-                          <span className={`text-sm font-semibold ${getRiskColor(patient.riskLevel)}`}>
-                            {patient.riskLevel.toUpperCase()}
-                          </span>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Stress</p>
+                          <p className={`font-semibold ${getStressColor(patient.latest_stress)}`}>
+                            {patient.latest_stress ? `${patient.latest_stress}%` : 'No data'}
+                          </p>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-sm text-muted-foreground">Stress:</span>
-                          <span className="text-sm font-semibold">{patient.stressLevel}%</span>
-                        </div>
-                        <div className="flex gap-2 mt-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/psychiatrist/messages?patient=${patient.id}`);
-                            }}
-                          >
-                            <MessageCircle className="w-3 h-3" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/psychiatrist/notes/${patient.id}`);
-                            }}
-                          >
-                            <FileText className="w-3 h-3" />
-                          </Button>
-                        </div>
+                        <Link to={`/psychiatrist/patient/${patient.user_id}`}>
+                          <button className="p-2 rounded-lg hover:bg-primary/10 transition-colors">
+                            <Eye className="w-5 h-5 text-primary" />
+                          </button>
+                        </Link>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
       </main>
