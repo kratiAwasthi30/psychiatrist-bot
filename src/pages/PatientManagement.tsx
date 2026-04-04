@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import Navbar from '@/components/Navbar';
-import { Users, Search, AlertTriangle, TrendingUp, Eye } from 'lucide-react';
+import { Users, Search, AlertTriangle, TrendingUp, Eye, UserPlus } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -68,6 +68,10 @@ const PatientManagement = () => {
             <h1 className="text-3xl font-serif font-bold">Patient Management</h1>
             <p className="text-muted-foreground mt-1">Monitor and manage your patients</p>
           </div>
+          <button onClick={() => navigate('/psychiatrist/add-patient')}
+            className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors">
+            <UserPlus className="w-4 h-4" /> Add Patient
+          </button>
         </div>
 
         {/* Stats */}

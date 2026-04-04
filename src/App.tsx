@@ -27,6 +27,7 @@ import PsychiatristDashboard from "./pages/PsychiatristDashboard";
 import PsychiatristSettings from "./pages/PsychiatristSettings";
 import ScheduleManager from "./pages/ScheduleManager";
 import MessagesCenter from "./pages/MessagesCentre";
+import AddPatient from './pages/AddPatient';
 import PatientManagement from "./pages/PatientManagement";
 import PatientDetails from "./pages/PatientDetails";
 import NotificationsCenter from "./pages/NotificationsCenter";
@@ -71,6 +72,7 @@ const App = () => (
           <Route path="/psychiatrist/schedule" element={<ProtectedRoute allowedRoles={['psychiatrist']}><ScheduleManager /></ProtectedRoute>} />
           <Route path="/psychiatrist/messages" element={<ProtectedRoute allowedRoles={['psychiatrist']}><MessagesCenter /></ProtectedRoute>} />
           <Route path="/psychiatrist/patients" element={<ProtectedRoute allowedRoles={['psychiatrist']}><PatientManagement /></ProtectedRoute>} />
+          <Route path="/psychiatrist/add-patient" element={<ProtectedRoute allowedRoles={['psychiatrist']}><AddPatient /></ProtectedRoute>} />
           <Route path="/psychiatrist/patient/:id" element={<ProtectedRoute allowedRoles={['psychiatrist']}><PatientDetails /></ProtectedRoute>} />
           <Route path="/psychiatrist/notifications" element={<ProtectedRoute allowedRoles={['psychiatrist']}><NotificationsCenter /></ProtectedRoute>} />
           <Route path="/psychiatrist/reports" element={<ProtectedRoute allowedRoles={['psychiatrist']}><ClinicalReports /></ProtectedRoute>} />

@@ -28,6 +28,8 @@ const chatRoutes = require('./routes/chat');
 const userRoutes = require('./routes/users');
 app.use('/api/users', userRoutes);
 app.use('/api/auth', authRoutes);
+const appointmentRoutes = require('./routes/appointments');
+app.use('/api/appointments', appointmentRoutes);
 app.use('/api/stress', stressRoutes);
 app.use('/api/reminders', reminderRoutes);
 app.use('/api/therapy', therapyRoutes);
