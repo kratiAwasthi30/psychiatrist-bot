@@ -25,29 +25,49 @@ const PatientDetails = () => {
     navigate('/');
   };
 
-  // Mock patient data - in production, fetch based on id
-  const patient = {
+  const [patient, setPatient] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const token = localStorage.getItem('token');
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+  useEffect(() => {
+    const fetchPatient = async () => {
+      try {
+        const res = await fetch(API_URL + '/users/all', {
+          headers: { Authorization: 'Bearer ' + token }
+        });
+        const data = await res.json();
+        if (data.success) {
+          const found = data.data.find((u: any) => String(u.user_id) === String(id));
+          if (found) setPatient(found);
+        }
+      } catch(e) { console.error(e); }
+      setLoading(false);
+    };
+    fetchPatient();
+  }, [id]);
+
+  if (loading) return <div className="flex items-center justify-center h-screen"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
+  if (!patient) return <div className="flex items-center justify-center h-screen text-muted-foreground">Patient not found</div>;
+
+  const patientData = {
     id,
-    name: 'Sarah Johnson',
-    age: 28,
-    avatar: '👩',
-    phone: '+1 (555) 100-0001',
-    email: 'sarah.j@email.com',
-    stressLevel: 35,
-    riskLevel: 'low' as const,
-    status: 'stable' as const,
-    conditions: ['Anxiety', 'Insomnia'],
-    medications: ['Sertraline 50mg daily', 'Melatonin 3mg at bedtime'],
-    allergies: ['Penicillin'],
-    emergencyContact: {
-      name: 'John Johnson',
-      relationship: 'Spouse',
-      phone: '+1 (555) 100-0002',
-    },
-    lastSession: '2 hours ago',
-    nextSession: 'Tomorrow at 10:00 AM',
-    sessionCount: 12,
-    notes: 'Making good progress with anxiety management. Patient is responding well to CBT techniques.',
+    name: patient.full_name,
+    age: '-',
+    avatar: '👤',
+    phone: '-',
+    email: patient.email,
+    stressLevel: patient.latest_stress || 0,
+    riskLevel: patient.latest_stress > 75 ? 'high' : patient.latest_stress > 40 ? 'medium' : 'low' as const,
+    status: patient.is_active ? 'stable' : 'inactive' as const,
+    conditions: [],
+    medications: [],
+    allergies: [],
+    emergencyContact: { name: '-', relationship: '-', phone: '-' },
+    lastSession: '-',
+    nextSession: '-',
+    sessionCount: 0,
+    notes: '',
   };
 
   const recentSessions = [
@@ -94,12 +114,12 @@ const PatientDetails = () => {
           <Card className="lg:col-span-1">
             <CardHeader>
               <div className="text-center">
-                <div className="text-6xl mb-4">{patient.avatar}</div>
-                <CardTitle className="text-2xl">{patient.name}</CardTitle>
-                <p className="text-muted-foreground">{patient.age} years old</p>
+                <div className="text-6xl mb-4">{patientData.avatar}</div>
+                <CardTitle className="text-2xl">{patientData.name}</CardTitle>
+                <p className="text-muted-foreground">{patientData.age} years old</p>
                 <div className="flex items-center justify-center gap-2 mt-3">
                   <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(patient.status)}`}>
-                    {patient.status}
+                    {patientData.status}
                   </span>
                 </div>
               </div>
@@ -133,7 +153,7 @@ const PatientDetails = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Risk Level</span>
                   <span className={`text-sm font-semibold ${getRiskColor(patient.riskLevel)}`}>
-                    {patient.riskLevel.toUpperCase()}
+                    {patientData.riskLevel.toUpperCase()}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -142,15 +162,15 @@ const PatientDetails = () => {
                     <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
                       <div 
                         className="h-full bg-primary rounded-full transition-all"
-                        style={{ width: `${patient.stressLevel}%` }}
+                        style={{ width: `${patientData.stressLevel}%` }}
                       />
                     </div>
-                    <span className="text-sm font-semibold">{patient.stressLevel}%</span>
+                    <span className="text-sm font-semibold">{patientData.stressLevel}%</span>
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Total Sessions</span>
-                  <span className="text-sm font-semibold">{patient.sessionCount}</span>
+                  <span className="text-sm font-semibold">{patientData.sessionCount}</span>
                 </div>
               </div>
             </CardContent>
@@ -168,14 +188,14 @@ const PatientDetails = () => {
                   <Phone className="w-4 h-4 text-muted-foreground" />
                   <div>
                     <p className="text-sm text-muted-foreground">Phone</p>
-                    <p className="font-medium">{patient.phone}</p>
+                    <p className="font-medium">{patientData.phone}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <Mail className="w-4 h-4 text-muted-foreground" />
                   <div>
                     <p className="text-sm text-muted-foreground">Email</p>
-                    <p className="font-medium">{patient.email}</p>
+                    <p className="font-medium">{patientData.email}</p>
                   </div>
                 </div>
                 <div className="pt-3 border-t border-border">
@@ -183,11 +203,11 @@ const PatientDetails = () => {
                   <div className="space-y-1">
                     <p className="text-sm">
                       <span className="text-muted-foreground">Name: </span>
-                      {patient.emergencyContact.name} ({patient.emergencyContact.relationship})
+                      {patientData.emergencyContact.name} ({patientData.emergencyContact.relationship})
                     </p>
                     <p className="text-sm">
                       <span className="text-muted-foreground">Phone: </span>
-                      {patient.emergencyContact.phone}
+                      {patientData.emergencyContact.phone}
                     </p>
                   </div>
                 </div>
@@ -206,7 +226,7 @@ const PatientDetails = () => {
                     Conditions
                   </h4>
                   <div className="flex gap-2 flex-wrap">
-                    {patient.conditions.map((condition, idx) => (
+                    {patientData.conditions.map((condition, idx) => (
                       <span 
                         key={idx} 
                         className="px-3 py-1 bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 rounded-lg text-sm"
@@ -220,7 +240,7 @@ const PatientDetails = () => {
                 <div>
                   <h4 className="font-semibold mb-2">Current Medications</h4>
                   <ul className="list-disc list-inside space-y-1">
-                    {patient.medications.map((medication, idx) => (
+                    {patientData.medications.map((medication, idx) => (
                       <li key={idx} className="text-sm text-muted-foreground">
                         {medication}
                       </li>
@@ -234,7 +254,7 @@ const PatientDetails = () => {
                     Allergies
                   </h4>
                   <div className="flex gap-2 flex-wrap">
-                    {patient.allergies.map((allergy, idx) => (
+                    {patientData.allergies.map((allergy, idx) => (
                       <span 
                         key={idx} 
                         className="px-3 py-1 bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 rounded-lg text-sm"
@@ -298,7 +318,7 @@ const PatientDetails = () => {
                     <FileText className="w-4 h-4 text-muted-foreground" />
                     <span className="text-sm text-muted-foreground">Latest Note</span>
                   </div>
-                  <p className="text-sm">{patient.notes}</p>
+                  <p className="text-sm">{patientData.notes}</p>
                 </div>
               </CardContent>
             </Card>
@@ -312,7 +332,7 @@ const PatientDetails = () => {
                   </div>
                   <div>
                     <h4 className="font-semibold text-foreground">Next Session</h4>
-                    <p className="text-sm text-muted-foreground">{patient.nextSession}</p>
+                    <p className="text-sm text-muted-foreground">{patientData.nextSession}</p>
                   </div>
                 </div>
               </CardContent>
