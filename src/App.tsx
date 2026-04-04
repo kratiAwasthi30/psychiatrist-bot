@@ -12,6 +12,7 @@ import ChatPage from "./pages/ChatPage";
 import StressCheck from "./pages/StressCheck";
 import Exercises from "./pages/Exercises";
 import RelaxMusic from "./pages/RelaxMusic";
+import AdminSettings from './pages/AdminSettings';
 import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
 import Relaxation from "./pages/Relaxation";
@@ -83,7 +84,7 @@ const App = () => (
           {/* Admin Routes */}
           <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
           <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
-          <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
+          <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['admin']}><AdminSettings /></ProtectedRoute>} />
 
           {/* Catch-all */}
           <Route path="/reset-password" element={<ResetPassword />} />
